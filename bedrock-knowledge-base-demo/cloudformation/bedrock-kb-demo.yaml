@@ -1,0 +1,523 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AWS AI Practitioner Demo - Bedrock Knowledge Base Application'
+
+Parameters:
+  MyIPAddress:
+    Type: String
+    Description: Your IP address for secure access (format x.x.x.x/32)
+    AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'
+    ConstraintDescription: Must be a valid IP address in CIDR format
+
+Resources:
+  # S3 Bucket for Knowledge Base Documents
+  KnowledgeBaseDocumentsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'bedrock-kb-docs-${AWS::AccountId}-int'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  # IAM Role for Bedrock Knowledge Base
+  BedrockKnowledgeBaseRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: BedrockKnowledgeBaseRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: bedrock.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub '${KnowledgeBaseDocumentsBucket.Arn}/*'
+                  - !GetAtt KnowledgeBaseDocumentsBucket.Arn
+
+  # Security Group for EC2
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for demo web server
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: !Ref MyIPAddress
+
+  # IAM Role for Lambda
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: BedrockKnowledgeBaseAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:Retrieve
+                  - bedrock:RetrieveAndGenerate
+                Resource: '*'
+
+  # IAM Role for EC2
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref EC2Role
+
+  # Lambda Function for Bedrock Knowledge Base
+  BedrockKnowledgeBaseLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: bedrock-kb-function
+      Runtime: python3.12
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 60
+      Environment:
+        Variables:
+          KNOWLEDGE_BASE_ID: 'PLACEHOLDER'
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from datetime import datetime
+          
+          def lambda_handler(event, context):
+              print(f"Lambda invoked with event: {json.dumps(event)}")
+              
+              try:
+                  # Parse input
+                  if 'body' in event and isinstance(event['body'], str):
+                      body = json.loads(event['body'])
+                  else:
+                      body = event
+                      
+                  user_query = body.get('query', 'What is AWS?')
+                  use_kb = body.get('use_knowledge_base', True)
+                  temperature = float(body.get('temperature', 0.7))
+                  max_tokens = int(body.get('max_tokens', 500))
+                  top_p = float(body.get('top_p', 0.9))
+                  
+                  print(f"Query: {user_query}, Use KB: {use_kb}")
+                  
+                  bedrock = boto3.client('bedrock-runtime', region_name='us-east-1')
+                  
+                  if use_kb:
+                      # Use Knowledge Base (placeholder - requires actual KB ID)
+                      kb_id = os.environ.get('KNOWLEDGE_BASE_ID')
+                      if kb_id == 'PLACEHOLDER':
+                          response_text = f"Knowledge Base response for: {user_query}\n\n[Note: This is a placeholder. Create a Knowledge Base and update the KNOWLEDGE_BASE_ID environment variable to enable actual KB queries.]"
+                      else:
+                          # Actual KB query would go here
+                          bedrock_agent = boto3.client('bedrock-agent-runtime')
+                          kb_response = bedrock_agent.retrieve_and_generate(
+                              input={'text': user_query},
+                              retrieveAndGenerateConfiguration={
+                                  'type': 'KNOWLEDGE_BASE',
+                                  'knowledgeBaseConfiguration': {
+                                      'knowledgeBaseId': kb_id,
+                                      'modelArn': 'arn:aws:bedrock:us-east-1::foundation-model/amazon.titan-text-express-v1'
+                                  }
+                              }
+                          )
+                          response_text = kb_response['output']['text']
+                  else:
+                      # Direct model query
+                      request_body = {
+                          "inputText": f"You are a helpful AWS assistant. Answer this question: {user_query}",
+                          "textGenerationConfig": {
+                              "maxTokenCount": max_tokens,
+                              "temperature": temperature,
+                              "topP": top_p
+                          }
+                      }
+                      
+                      response = bedrock.invoke_model(
+                          modelId='amazon.titan-text-express-v1',
+                          body=json.dumps(request_body)
+                      )
+                      
+                      response_text = json.loads(response['body'].read())['results'][0]['outputText'].strip()
+                  
+                  return {
+                      'statusCode': 200,
+                      'headers': {
+                          'Access-Control-Allow-Origin': '*',
+                          'Content-Type': 'application/json'
+                      },
+                      'body': json.dumps({
+                          'response': response_text,
+                          'query': user_query,
+                          'used_knowledge_base': use_kb,
+                          'timestamp': datetime.now().isoformat(),
+                          'parameters': {
+                              'temperature': temperature,
+                              'max_tokens': max_tokens,
+                              'top_p': top_p
+                          }
+                      })
+                  }
+                  
+              except Exception as e:
+                  print(f"ERROR: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'headers': {
+                          'Access-Control-Allow-Origin': '*',
+                          'Content-Type': 'application/json'
+                      },
+                      'body': json.dumps({
+                          'error': str(e),
+                          'query': user_query if 'user_query' in locals() else 'Unknown'
+                      })
+                  }
+
+  # Add Lambda invoke permission to EC2 Role
+  EC2LambdaPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: LambdaInvokeAccess
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - lambda:InvokeFunction
+            Resource: !GetAtt BedrockKnowledgeBaseLambda.Arn
+      Roles:
+        - !Ref EC2Role
+
+  # EC2 Instance
+  WebServerInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0b45bb3902b734bb5
+      InstanceType: t4g.nano
+      SecurityGroupIds:
+        - !Ref WebServerSecurityGroup
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+          echo "Starting UserData script"
+          
+          # Wait for any existing yum processes to complete
+          echo "Waiting for yum lock to be available"
+          while pgrep yum > /dev/null; do
+              echo "Waiting for yum process to complete..."
+              sleep 5
+          done
+          
+          # Function to retry yum commands
+          retry_yum() {
+              local cmd="$1"
+              local max_attempts=5
+              local attempt=1
+              
+              while [ $attempt -le $max_attempts ]; do
+                  echo "Attempt $attempt: $cmd"
+                  if eval "$cmd"; then
+                      echo "Success: $cmd"
+                      return 0
+                  else
+                      echo "Failed attempt $attempt: $cmd"
+                      if [ $attempt -lt $max_attempts ]; then
+                          echo "Waiting 10 seconds before retry..."
+                          sleep 10
+                      fi
+                  fi
+                  attempt=$((attempt + 1))
+              done
+              
+              echo "ERROR: All attempts failed for: $cmd"
+              return 1
+          }
+          
+          # Update system with retry
+          echo "Updating system packages"
+          retry_yum "yum update -y"
+          
+          # Install Apache and Python with retry
+          echo "Installing httpd and python3-pip"
+          retry_yum "yum install -y httpd python3-pip"
+          if [ $? -ne 0 ]; then
+              echo "ERROR: Failed to install packages after all retries"
+              exit 1
+          fi
+          
+          # Install boto3
+          echo "Installing boto3"
+          pip3 install boto3
+          
+          # Start Apache
+          echo "Starting Apache"
+          systemctl start httpd
+          systemctl enable httpd
+          
+          # Check if Apache is running
+          if ! systemctl is-active --quiet httpd; then
+              echo "ERROR: Apache failed to start"
+              exit 1
+          fi
+          
+          echo "Apache started successfully"
+          
+          # Create simple web page
+          echo "Creating web page"
+          cat > /var/www/html/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>Bedrock Knowledge Base Demo</title>
+              <style>
+                  body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
+                  .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                  h1 { color: #232f3e; text-align: center; }
+                  .config-panel { background: #f8f9fa; padding: 20px; margin: 20px 0; border-radius: 5px; }
+                  .query-panel { background: #e8f5e8; padding: 20px; margin: 20px 0; border-radius: 5px; }
+                  button { background: #ff9900; color: white; padding: 12px 24px; border: none; border-radius: 5px; cursor: pointer; margin: 5px; }
+                  button:hover { background: #e88b00; }
+                  textarea { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; }
+                  .slider-container { margin: 10px 0; }
+                  .slider { width: 100%; }
+                  #response { margin-top: 20px; padding: 15px; background: #e8f5e8; border-radius: 5px; display: none; }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <h1>🤖 Bedrock Knowledge Base Demo</h1>
+                  
+                  <div class="config-panel">
+                      <h3>AI Configuration</h3>
+                      <div class="slider-container">
+                          <label>Temperature: <span id="tempValue">0.7</span></label>
+                          <input type="range" id="temperature" class="slider" min="0" max="1" step="0.1" value="0.7" oninput="updateTemp(this.value)">
+                      </div>
+                      <div class="slider-container">
+                          <label>Max Tokens: <span id="tokensValue">500</span></label>
+                          <input type="range" id="maxTokens" class="slider" min="100" max="2000" step="100" value="500" oninput="updateTokens(this.value)">
+                      </div>
+                      <div class="slider-container">
+                          <label>Top P: <span id="topPValue">0.9</span></label>
+                          <input type="range" id="topP" class="slider" min="0" max="1" step="0.1" value="0.9" oninput="updateTopP(this.value)">
+                      </div>
+                  </div>
+                  
+                  <div class="query-panel">
+                      <h3>Ask Questions</h3>
+                      <textarea id="userQuery" rows="3" placeholder="Ask a question about the knowledge base...">What is AWS Lambda?</textarea>
+                      <br>
+                      <button onclick="queryWithKB()">🔍 Query with Knowledge Base</button>
+                      <button onclick="queryWithoutKB()">💭 Query without Knowledge Base</button>
+                  </div>
+                  
+                  <div id="response"></div>
+              </div>
+              
+              <script>
+                  function updateTemp(val) { document.getElementById('tempValue').textContent = val; }
+                  function updateTokens(val) { document.getElementById('tokensValue').textContent = val; }
+                  function updateTopP(val) { document.getElementById('topPValue').textContent = val; }
+                  
+                  async function queryWithKB() {
+                      await queryLambda(true);
+                  }
+                  
+                  async function queryWithoutKB() {
+                      await queryLambda(false);
+                  }
+                  
+                  async function queryLambda(useKB) {
+                      const query = document.getElementById('userQuery').value;
+                      const temperature = parseFloat(document.getElementById('temperature').value);
+                      const maxTokens = parseInt(document.getElementById('maxTokens').value);
+                      const topP = parseFloat(document.getElementById('topP').value);
+                      
+                      showResponse(`⏳ ${useKB ? 'Querying with Knowledge Base' : 'Querying without Knowledge Base'}...`);
+                      
+                      try {
+                          const response = await fetch('/invoke-lambda', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                  query: query,
+                                  use_knowledge_base: useKB,
+                                  temperature: temperature,
+                                  max_tokens: maxTokens,
+                                  top_p: topP
+                              })
+                          });
+                          
+                          const data = await response.json();
+                          
+                          if (response.ok) {
+                              const kbStatus = useKB ? '🧠 Knowledge Base Enhanced' : '💭 Standard Model';
+                              showResponse(
+                                  `<h4>✅ ${kbStatus} Response</h4>` +
+                                  `<p><strong>Query:</strong> ${data.query}</p>` +
+                                  `<p><strong>Response:</strong> ${data.response}</p>` +
+                                  `<p><strong>Parameters:</strong> Temp: ${data.parameters.temperature}, Tokens: ${data.parameters.max_tokens}, Top-P: ${data.parameters.top_p}</p>` +
+                                  `<small>🔄 Flow: Browser → EC2 → Lambda → Bedrock ${useKB ? '+ Knowledge Base' : ''}</small>`
+                              );
+                          } else {
+                              showResponse(`<h4>❌ Error:</h4><p>${data.error || 'Unknown error'}</p>`);
+                          }
+                      } catch (error) {
+                          showResponse(`<h4>❌ Network Error:</h4><p>${error.message}</p>`);
+                      }
+                  }
+                  
+                  function showResponse(html) {
+                      const responseDiv = document.getElementById('response');
+                      responseDiv.innerHTML = html;
+                      responseDiv.style.display = 'block';
+                  }
+              </script>
+          </body>
+          </html>
+          EOF
+          
+          # Create Python CGI script to invoke Lambda
+          echo "Creating CGI script"
+          mkdir -p /var/www/cgi-bin
+          cat > /var/www/cgi-bin/invoke-lambda.py << 'PYTHON_EOF'
+          #!/usr/bin/env python3
+          import json
+          import boto3
+          import cgi
+          import cgitb
+          import sys
+          import os
+          
+          # Enable CGI error reporting
+          cgitb.enable()
+          
+          # Set content type
+          print("Content-Type: application/json")
+          print("Access-Control-Allow-Origin: *")
+          print("Access-Control-Allow-Methods: POST, OPTIONS")
+          print("Access-Control-Allow-Headers: Content-Type")
+          print()  # Empty line required
+          
+          try:
+              # Handle OPTIONS request for CORS
+              if os.environ.get('REQUEST_METHOD') == 'OPTIONS':
+                  print(json.dumps({"status": "ok"}))
+                  sys.exit(0)
+              
+              # Read POST data
+              content_length = int(os.environ.get('CONTENT_LENGTH', 0))
+              if content_length > 0:
+                  post_data = sys.stdin.read(content_length)
+                  data = json.loads(post_data)
+              else:
+                  data = {"query": "What is AWS?"}
+              
+              # Invoke Lambda function
+              lambda_client = boto3.client('lambda', region_name='us-east-1')
+              
+              response = lambda_client.invoke(
+                  FunctionName='bedrock-kb-function',
+                  InvocationType='RequestResponse',
+                  Payload=json.dumps(data)
+              )
+              
+              # Parse Lambda response
+              lambda_response = json.loads(response['Payload'].read())
+              
+              if response['StatusCode'] == 200:
+                  if 'body' in lambda_response:
+                      # Lambda returned HTTP response format
+                      result = json.loads(lambda_response['body'])
+                  else:
+                      # Lambda returned direct response
+                      result = lambda_response
+                  print(json.dumps(result))
+              else:
+                  print(json.dumps({"error": "Lambda invocation failed"}))
+                  
+          except Exception as e:
+              print(json.dumps({"error": str(e)}))
+          PYTHON_EOF
+          
+          chmod +x /var/www/cgi-bin/invoke-lambda.py
+          
+          # Configure Apache for CGI
+          echo "Configuring Apache for CGI"
+          cat >> /etc/httpd/conf/httpd.conf << 'APACHE_EOF'
+          
+          # Enable CGI
+          LoadModule cgi_module modules/mod_cgi.so
+          ScriptAlias /invoke-lambda /var/www/cgi-bin/invoke-lambda.py
+          
+          <Directory "/var/www/cgi-bin">
+              AllowOverride None
+              Options ExecCGI
+              Require all granted
+          </Directory>
+          APACHE_EOF
+          
+          echo "Restarting Apache"
+          systemctl restart httpd
+          
+          if systemctl is-active --quiet httpd; then
+              echo "SUCCESS: UserData script completed successfully"
+          else
+              echo "ERROR: Apache failed to restart"
+              exit 1
+          fi
+      Tags:
+        - Key: Name
+          Value: bedrock-demo-server
+
+Outputs:
+  WebsiteURL:
+    Description: Demo website URL
+    Value: !GetAtt WebServerInstance.PublicDnsName
+    
+  S3BucketName:
+    Description: S3 bucket for knowledge base documents
+    Value: !Ref KnowledgeBaseDocumentsBucket
+    
+  LambdaFunctionName:
+    Description: Lambda function for Bedrock Knowledge Base
+    Value: !Ref BedrockKnowledgeBaseLambda

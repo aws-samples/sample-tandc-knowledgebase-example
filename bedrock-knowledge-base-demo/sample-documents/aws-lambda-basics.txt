@@ -1,0 +1,62 @@
+AWS Lambda Basics
+
+What is AWS Lambda?
+AWS Lambda is a serverless compute service that lets you run code without provisioning or managing servers. You pay only for the compute time you consume.
+
+Key Features:
+- No servers to manage
+- Continuous scaling
+- Millisecond billing
+- Built-in fault tolerance
+- Automatic logging and monitoring
+
+How Lambda Works:
+1. Upload your code to Lambda
+2. Set up your code to trigger from AWS services, HTTP endpoints, or in-app activity
+3. Lambda runs your code only when triggered
+4. Pay only for compute time used
+
+Common Use Cases:
+- Data processing
+- Real-time file processing
+- Web applications
+- IoT backends
+- Mobile backends
+
+Supported Runtimes:
+- Python
+- Node.js
+- Java
+- C#
+- Go
+- Ruby
+- Custom runtimes
+
+Lambda Pricing:
+- Request charges: $0.20 per 1M requests
+- Duration charges: Based on memory allocated and execution time
+- Free tier: 1M free requests per month
+
+Best Practices:
+1. Keep functions small and focused
+2. Use environment variables for configuration
+3. Implement proper error handling
+4. Monitor with CloudWatch
+5. Use layers for shared code
+6. Optimize memory allocation
+7. Use provisioned concurrency for consistent performance
+
+Lambda Limits:
+- Maximum execution time: 15 minutes
+- Memory: 128 MB to 10,240 MB
+- Deployment package size: 50 MB (zipped)
+- Temporary disk space: 10 GB
+- Environment variables: 4 KB total
+
+Integration with Other AWS Services:
+- API Gateway for HTTP APIs
+- S3 for file processing
+- DynamoDB for database operations
+- SNS/SQS for messaging
+- EventBridge for event routing
+- CloudWatch for monitoring

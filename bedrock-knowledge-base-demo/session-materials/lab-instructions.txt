@@ -1,0 +1,60 @@
+AWS AI Practitioner Lab Instructions
+
+Lab 1: Exploring Amazon Bedrock Console
+
+Objective:
+Learn to navigate the Bedrock console and test different foundation models.
+
+Prerequisites:
+- AWS account with Bedrock access
+- Basic understanding of AI concepts
+
+Step-by-Step Instructions:
+
+1. Access Bedrock Console
+   - Sign in to AWS Console
+   - Navigate to Amazon Bedrock
+   - Select us-east-1 region
+
+2. Enable Model Access
+   - Click "Model access" in left navigation
+   - Request access to Claude 3 Haiku
+   - Request access to Titan Text Express
+   - Wait for approval (usually instant)
+
+3. Test Text Generation
+   - Go to "Text" playground
+   - Select Claude 3 Haiku model
+   - Enter prompt: "Explain AWS Lambda in simple terms"
+   - Click "Run"
+   - Observe the response
+
+4. Experiment with Parameters
+   - Temperature: Try 0.1, 0.5, 0.9
+   - Max tokens: Try 100, 300, 500
+   - Top P: Try 0.1, 0.5, 0.9
+   - Note differences in responses
+
+5. Compare Models
+   - Test same prompt with different models
+   - Compare response quality and style
+   - Note speed differences
+
+6. Cost Analysis
+   - Check pricing information
+   - Calculate cost for your test queries
+   - Understand token-based pricing
+
+Common Issues:
+- Model access denied: Request access in Model access page
+- No response: Check region and model availability
+- High costs: Monitor token usage carefully
+
+Lab Questions:
+1. Which temperature setting gives most consistent results?
+2. How does max tokens affect response completeness?
+3. What's the cost difference between models?
+4. Which model works best for technical explanations?
+
+Next Lab:
+We'll create a knowledge base using your own documents.
