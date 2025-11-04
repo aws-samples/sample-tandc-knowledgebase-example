@@ -389,13 +389,14 @@ Resources:
                           
                           const data = await response.json();
                           
-                          if (response.ok) {
+                          if (response.ok && !data.error) {
                               const kbStatus = useKB ? '🧠 Knowledge Base Enhanced' : '💭 Standard Model';
+                              const params = data.parameters || { temperature, max_tokens: maxTokens, top_p: topP };
                               showResponse(
                                   `<h4>✅ ${kbStatus} Response</h4>` +
                                   `<p><strong>Query:</strong> ${data.query}</p>` +
                                   `<p><strong>Response:</strong> ${data.response}</p>` +
-                                  `<p><strong>Parameters:</strong> Temp: ${data.parameters.temperature}, Tokens: ${data.parameters.max_tokens}, Top-P: ${data.parameters.top_p}</p>` +
+                                  `<p><strong>Parameters:</strong> Temp: ${params.temperature}, Tokens: ${params.max_tokens}, Top-P: ${params.top_p}</p>` +
                                   `<small>🔄 Flow: Browser → EC2 → Lambda → Bedrock ${useKB ? '+ Knowledge Base' : ''}</small>`
                               );
                           } else {
