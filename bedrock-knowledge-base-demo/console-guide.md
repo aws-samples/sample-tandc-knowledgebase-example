@@ -37,13 +37,6 @@ This guide walks through building a Bedrock Knowledge Base application across 3 
 ## Session 2: Knowledge Base Creation (30 minutes)
 **Goal**: Set up vector database and create knowledge base
 
-### Step 1: Create OpenSearch Collection (15 mins)
-1. Navigate to **OpenSearch Service Console**
-2. Click **Collections** → **Create collection**
-3. Collection name: `bedrock-kb-collection`
-4. Collection type: **Vector search**
-5. Security: AWS owned key
-6. Click **Create** (takes 5-8 minutes)
 
 ### Step 2: Create Knowledge Base (15 mins)
 1. Navigate to **Bedrock Console**
@@ -55,8 +48,7 @@ This guide walks through building a Bedrock Knowledge Base application across 3 
    - S3 URI: `s3://bedrock-kb-docs-[ACCOUNT-ID]-INT/`
    - Chunking: Default
 5. Vector database:
-   - Collection: `bedrock-kb-collection`
-   - Index: `course-kb-index`
+   - Collection: Elastichae serverless
 6. Click **Create**
 
 ---
