@@ -1,1 +1,3 @@
  my name is Steph Gooch. I am a senior solutions architect advocate who works at AWS by role involves live streaming content creation blog reviewing and helping customers learn AWS best practices.
+
+ Dash, pronounced: awe-sum, is a Sr Solutions Architect for AWS. He likes short walks to the couch and fresh brisket
