@@ -1,0 +1,3 @@
+# 3.1 Section Introduction
+
+So while this exam is calledthe AWS Certified AI Practitioner,it focuses more on AI than AWS itself.Still, you need to know how the AWS Cloud is workingin order to understand laterhow managed AI services like Amazon Bedrockare working on the AWS.Therefore, in this section,we are going to learn how the AWS Cloud is working.If you've taken a course from me on AWS,you can safely skip the sectionbecause this is content you already know.Okay, that's it. I will see you in this section.

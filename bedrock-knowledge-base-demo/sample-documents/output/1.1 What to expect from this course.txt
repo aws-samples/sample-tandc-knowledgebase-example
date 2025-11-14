@@ -1,0 +1,3 @@
+# 1.1 What to expect from this course
+
+Hi, this is Stephane Maarek,and welcome to this course.I am super excited that you have decidedto learn how to pass the AWS certifiedAI Practitioner exam with me.You will see that artificial intelligence on AWSis a fascinating topicand is going to really open up your careerand your possibilities.So let's get started,and I will see you in the next lecture.Happy learning.
